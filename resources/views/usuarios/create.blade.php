@@ -45,6 +45,16 @@
                     <input type="password" name="password" placeholder="••••••••" required>
                     @error('password') <span class="error-texto" style="color: red; font-size: 13px;">{{ $message }}</span> @enderror
                 </div>
+                <div class="campo">
+                    <label>Dni *</label>
+                    <input type="number" name="dni" placeholder="Numero de documento" required>
+                    @error('dni') <span class="error-texto" style="color: red; font-size: 13px;">{{ $message }}</span> @enderror
+                </div>
+                <div class="campo">
+                    <label>email *</label>
+                    <input type="text" name="email" placeholder="email" required>
+                    @error('email') <span class="error-texto" style="color: red; font-size: 13px;">{{ $message }}</span> @enderror
+                </div>
             </div>
 
             <br>
