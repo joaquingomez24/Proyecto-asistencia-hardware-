@@ -10,15 +10,16 @@ class Prosecretario extends Authenticatable
     protected $primaryKey = 'id_prosecretario';
 
     protected $fillable = [
+        'rol',
         'usuario',
-        'contraseña',
-        'nombre',
-        'apellido',
+        'password',
         'dni',
+        'email'
+
     ];
 
     public function getAuthPassword()
     {
-        return $this->contraseña;
+        return $this->password;
     }
 }

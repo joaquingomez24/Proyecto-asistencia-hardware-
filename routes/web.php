@@ -61,5 +61,5 @@ Route::middleware(['auth'])->group(function () {
 
     // Gestión de Usuarios
     Route::get('/crear-cuenta', [UsuarioController::class, 'index'])->name('usuarios.index');
-    Route::post('/crear-cuenta', [UsuarioController::class, 'store'])->name('usuarios.store');
+    Route::post('/crear-cuenta/store', [UsuarioController::class, 'store'])->name('usuarios.store');
 });

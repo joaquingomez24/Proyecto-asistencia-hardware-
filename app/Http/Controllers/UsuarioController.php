@@ -16,7 +16,7 @@ class UsuarioController extends Controller
             return redirect()->route('home');
         }//fin
        $usuarios = DB::table('users')
-        ->select('rol', 'name as usuario')
+        ->select('rol', 'usuario as usuario')
         ->get();
 
     return view('usuarios.create', compact('usuarios'));
@@ -29,7 +29,7 @@ class UsuarioController extends Controller
             return redirect()->route('home');
         }//fin
         // Elegir la tabla destino según el rol para validar duplicados
-        $tabla = $request->rol === 'prosecretario' ? 'prosecretario' : 'jefe_preceptors';
+        $tabla = 'users';//'prosecretario' ? 'prosecretario' : 'jefe_preceptors';
 
         $request->validate([
             'rol' => 'required|in:prosecretario,jefe_preceptores',
@@ -41,8 +41,8 @@ class UsuarioController extends Controller
             'rol.required' => 'El rol es obligatorio.',
             'usuario.required' => 'El nombre de usuario es obligatorio.',
             'usuario.unique' => 'Este nombre de usuario ya existe para este rol.',
-            'password.required' => 'La contraseña es obligatoria.',
-            'password.min' => 'La contraseña debe tener al menos 6 caracteres.',
+            'password.required' => 'La password es obligatoria.',
+            'password.min' => 'La password debe tener al menos 6 caracteres.',
             'dni.required' => 'El DNI es obligatorio.',
             'dni.numeric' => 'El DNI debe contener solo números.',
             'dni.unique' => 'Este DNI ya está registrado.',
@@ -52,8 +52,9 @@ class UsuarioController extends Controller
         ]);
 
         $datos = [
+            'rol' => $request->rol,
             'usuario' => $request->usuario,
-            'contraseña' => Hash::make($request->password),
+            'password' => Hash::make($request->password),
             'dni' => $request->dni,
             'email' => $request->email,
             'created_at' => now(),
