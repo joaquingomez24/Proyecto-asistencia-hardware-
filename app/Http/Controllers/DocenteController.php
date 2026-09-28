@@ -276,4 +276,43 @@ class DocenteController extends Controller
 
         return null;
     }
+    /**
+     * Desactivar un docente.
+     */
+    public function desactivar($id)
+    {
+        try {
+            DB::table('docentes')->where('id_docente', $id)->update(['activo' => 0]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Docente desactivado correctamente.'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al desactivar el docente: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Activar un docente.
+     */
+    public function activar($id)
+    {
+        try {
+            DB::table('docentes')->where('id_docente', $id)->update(['activo' => 1]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Docente activado correctamente.'
+            ], 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al activar el docente: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 }
