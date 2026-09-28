@@ -160,227 +160,118 @@ class DocenteController extends Controller
         return view('docentes.edit', compact('docente', 'materias'));
     }
 
-        public function update(Request $request, $id)
+        /**
+     * Actualizar los datos del docente y sus materias/horarios.
+     */
+    public function update(Request $request, $id)
     {
-        $request->validate([
-            'materia'  => 'required|array',
-            'turno'    => 'required|array',
-            'curso'    => 'required|array',
-            'division' => 'required|array',
-            'entrada'  => 'required|array',
-            'salida'   => 'required|array',
-            'dia'      => 'required|array',
-        ]);
+        $docente = DB::table('docentes')->where('id_docente', $id)->first();
 
-        $docente = Docente::findOrFail($id);
+        if (!$docente) {
+            return back()->withErrors(['No se encontró el docente.'])->withInput();
+        }
 
-        $materias   = $request->input('materia', []);
-        $turnos     = $request->input('turno', []);
-        $cursos     = $request->input('curso', []);
-        $divisiones = $request->input('division', []);
-        $entradas   = $request->input('entrada', []);
-        $salidas    = $request->input('salida', []);
-        $dias       = $request->input('dia', []);
-        $idsMaterias = $request->input('id_materia', []);
+        // 1. Validar conflictos de horario antes de actualizar
+        if ($request->has('materia') && is_array($request->materia)) {
+            foreach ($request->materia as $i => $nombreMateria) {
+                $materiaIdIgnorar = $request->id_materia[$i] ?? null;
+                $curso = $request->curso[$i] ?? null;
+                $division = $request->division[$i] ?? null;
+                $dia = $request->dia[$i] ?? null;
+                $inicio = $request->entrada[$i] ?? null;
+                $fin = $request->salida[$i] ?? null;
 
-        // 1. Validar solapamientos en el conjunto de horarios enviados en el mismo formulario
-        for ($i = 0; $i < count($materias); $i++) {
-            for ($j = $i + 1; $j < count($materias); $j++) {
-                if ($dias[$i] === $dias[$j] && $entradas[$i] < $salidas[$j] && $salidas[$i] > $entradas[$j]) {
-                    return back()->withErrors(['error' => "Conflicto interno: Se ingresaron horarios superpuestos el día {$dias[$i]}."])->withInput();
+                if ($curso && $division && $dia && $inicio && $fin) {
+                    $error = $this->validarConflictoHorario($id, $materiaIdIgnorar, $curso, $division, $dia, $inicio, $fin);
+                    if ($error) {
+                        return back()->withErrors([$error])->withInput();
+                    }
                 }
             }
         }
 
-        // 2. Validar contra la base de datos
-        foreach ($materias as $index => $nombreMateria) {
-            $materiaId = $idsMaterias[$index] ?? null;
-            $dia       = $dias[$index];
-            $entrada   = $entradas[$index];
-            $salida    = $salidas[$index];
-            $curso     = $cursos[$index];
-            $div       = $divisiones[$index];
-
-            $errorBD = $this->validarConflictosHorarios($id, $dia, $entrada, $salida, $curso, $div, $materiaId);
-            if ($errorBD) {
-                return back()->withErrors(['error' => $errorBD])->withInput();
-            }
-
-            // Conflicto del Docente (Mismo día y cruce de horario en sus otras materias)
-            $conflictoDocente = Materia::join('docentes_materias', 'materias.id_materias', '=', 'docentes_materias.id_materias')
-            ->where('docentes_materias.id_docente', $id)
-            ->where('materias.dia', $dia)
-            ->where('materias.id_materias', '!=', $materiaId)
-            ->where(function ($query) use ($entrada, $salida) {
-                $query->where('materias.horario_inicio', '<', $salida)
-                    ->where('materias.horario_finalizacion', '>', $entrada);
-            })
-            ->exists();
-
-            if ($conflictoDocente) {
-                return back()->withErrors(['error' => "El docente ya tiene una clase asignada el {$dia} entre {$entrada} y {$salida}."])->withInput();
-            }
-
-            // Conflicto del Curso/División (Mismo día, curso, división y cruce de horario con cualquier profesor)
-            $conflictoCurso = Materia::where('curso', $curso)
-                ->where('division', $div)
-                ->where('dia', $dia)
-                ->where('id_materias', '!=', $materiaId)
-                ->where(function ($query) use ($entrada, $salida) {
-                    $query->where('horario_inicio', '<', $salida)
-                        ->where('horario_finalizacion', '>', $entrada);
-                })
-                ->exists();
-
-            if ($conflictoCurso) {
-                return back()->withErrors(['error' => "El curso {$curso} {$div} ya tiene un profesor asignado el {$dia} entre {$entrada} y {$salida}."])->withInput();
-            }
-        }
-
-        // 3. Si no hay conflictos, proceder con las actualizaciones del docente y materias...
-            $docente->update([
-            'nombre'   => $request->nombre,
-            'apellido' => $request->apellido,
-            'DNI'      => $request->DNI,
-            'telefono' => $request->telefono,
-            'email'    => $request->email,
+        // 2. Actualizar datos básicos del docente
+        DB::table('docentes')->where('id_docente', $id)->update([
+            'nombre'    => $request->nombre,
+            'apellido'  => $request->apellido,
+            'DNI'       => $request->DNI,
+            'telefono'  => $request->telefono,
+            'email'     => $request->email,
+            'id_huella' => $request->id_huella,
         ]);
 
-        // Recorrer y actualizar o insertar cada materia
-        foreach ($materias as $index => $nombreMateria) {
-            $materiaId = $idsMaterias[$index] ?? null;
+        // 3. Procesar las materias/horarios
+        if ($request->has('materia') && is_array($request->materia)) {
+            foreach ($request->materia as $i => $nombreMateria) {
+                $idMateria = $request->id_materia[$i] ?? null;
 
-            if ($materiaId) {
-                // Si la materia ya existe en la base de datos, se actualiza por su ID
-                Materia::where('id_materias', $materiaId)->update([
+                $datosMateria = [
                     'nombre'               => $nombreMateria,
-                    'turno'                => $turnos[$index] ?? null,
-                    'curso'                => $cursos[$index] ?? null,
-                    'division'             => $divisiones[$index] ?? null,
-                    'dia'                  => $dias[$index] ?? null,
-                    'horario_inicio'       => $entradas[$index] ?? null,
-                    'horario_finalizacion' => $salidas[$index] ?? null,
-                ]);
-            } else {
-                // Si se agregó un nuevo horario desde el JS, se crea en la BD y se asocia al docente
-                $nuevaMateria = Materia::create([
-                    'nombre'               => $nombreMateria,
-                    'turno'                => $turnos[$index] ?? null,
-                    'curso'                => $cursos[$index] ?? null,
-                    'division'             => $divisiones[$index] ?? null,
-                    'dia'                  => $dias[$index] ?? null,
-                    'horario_inicio'       => $entradas[$index] ?? null,
-                    'horario_finalizacion' => $salidas[$index] ?? null,
-                ]);
+                    'turno'                => $request->turno[$i] ?? null,
+                    'curso'                => $request->curso[$i] ?? null,
+                    'division'             => $request->division[$i] ?? null,
+                    'horario_inicio'       => $request->entrada[$i] ?? null,
+                    'horario_finalizacion' => $request->salida[$i] ?? null,
+                    'dia'                  => $request->dia[$i] ?? null,
+                ];
 
-                // Asociar en la tabla pivote docentes_materias
-                \DB::table('docentes_materias')->insert([
-                    'id_docente'  => $id,
-                    'id_materias' => $nuevaMateria->id_materias,
-                ]);
-            }
-        }
-        return redirect()->route('docentes.buscar')->with('exito', 'Docente actualizado correctamente.');
-    }
-
-    public function destroyMateria($id)
-    {
-        if (auth()->user()->rol !== 'prosecretario') {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-
-        DB::table('docentes_materias')->where('id_materias', $id)->delete();
-        Materia::where('id_materias', $id)->delete();
-
-        return response()->json(['success' => true]);
-    }
-
-    public function desactivar($id)
-    {
-        if (auth()->user()->rol !== 'prosecretario') {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-
-        $docente = Docente::findOrFail($id);
-        $docente->activo = false;
-        $docente->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Docente desactivado correctamente'
-        ], 200);
-    }
-
-    public function activar($id)
-    {
-        if (auth()->user()->rol !== 'prosecretario') {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-
-        $docente = Docente::findOrFail($id);
-        $docente->activo = true;
-        $docente->save();
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Docente activado correctamente'
-        ], 200);
-    }
-
-    public function destroy($id)
-    {
-        if (auth()->user()->rol !== 'prosecretario') {
-            return response()->json(['error' => 'No autorizado'], 403);
-        }
-
-        $docente = Docente::findOrFail($id);
-        
-        DB::table('docentes_materias')->where('id_docente', $id)->delete();
-        $docente->delete();
-
-        if (request()->wantsJson()) {
-            return response()->json(['success' => true, 'message' => 'Docente eliminado correctamente']);
-        }
-
-        return redirect()->back()->with('exito', 'Docente eliminado correctamente.');
-    }
-
-    private function validarConflictosHorarios($docenteId, $dia, $inicio, $fin, $curso, $division, $materiaIdIgnorar = null)
-    {
-        // 1. Conflicto del mismo Docente
-        if ($docenteId) {
-            $conflictoDocente = DB::table('materias')
-                ->join('docentes_materias', 'materias.id_materias', '=', 'docentes_materias.id_materias')
-                ->join('docentes', 'docentes.id_docente', '=', 'docentes_materias.id_docente')
-                ->where('docentes_materias.id_docente', $docenteId)
-                ->where('materias.dia', $dia)
-                ->when($materiaIdIgnorar, fn($q) => $q->where('materias.id_materias', '!=', $materiaIdIgnorar))
-                ->where('materias.horario_inicio', '<', $fin)
-                ->where('materias.horario_finalizacion', '>', $inicio)
-                ->select('docentes.nombre', 'docentes.apellido', 'materias.nombre as materia')
-                ->first();
-
-            if ($conflictoDocente) {
-                return "El docente {$conflictoDocente->nombre} {$conflictoDocente->apellido} ya tiene asignada la materia '{$conflictoDocente->materia}' el día {$dia} de {$inicio} a {$fin}.";
+                if ($idMateria) {
+                    // Actualizar materia existente
+                    DB::table('materias')->where('id_materias', $idMateria)->update($datosMateria);
+                } else {
+                    // Crear nueva materia y vincularla al docente
+                    $nuevoIdMateria = DB::table('materias')->insertGetId($datosMateria);
+                    DB::table('docentes_materias')->insert([
+                        'id_docente'  => $id,
+                        'id_materias' => $nuevoIdMateria,
+                    ]);
+                }
             }
         }
 
-        // 2. Conflicto del Curso/División (Trae el nombre del otro profesor)
+        return redirect()->route('home')->with('exito', 'Docente actualizado correctamente.');
+    }
+
+    /**
+     * Función privada para validar solapamiento de horarios ignorando al docente actual y la materia que se edita.
+     */
+    private function validarConflictoHorario($docenteId, $materiaIdIgnorar, $curso, $division, $dia, $inicio, $fin)
+    {
+        // 1. Conflicto de Horario del mismo Docente (ignora el horario que está editando)
+        $conflictoDocente = DB::table('materias')
+            ->join('docentes_materias', 'materias.id_materias', '=', 'docentes_materias.id_materias')
+            ->where('docentes_materias.id_docente', $docenteId)
+            ->where('materias.dia', $dia)
+            ->when($materiaIdIgnorar, function ($q) use ($materiaIdIgnorar) {
+                return $q->where('materias.id_materias', '!=', $materiaIdIgnorar);
+            })
+            ->where('materias.horario_inicio', '<', $fin)
+            ->where('materias.horario_finalizacion', '>', $inicio)
+            ->select('materias.nombre as materia')
+            ->first();
+
+        if ($conflictoDocente) {
+            return "El docente ya tiene asignada la materia '{$conflictoDocente->materia}' el día {$dia} entre {$inicio} y {$fin}.";
+        }
+
+        // 2. Conflicto de Aula/Curso (ignora al docente actual y la materia que está editando)
         $conflictoCurso = DB::table('materias')
             ->join('docentes_materias', 'materias.id_materias', '=', 'docentes_materias.id_materias')
             ->join('docentes', 'docentes.id_docente', '=', 'docentes_materias.id_docente')
             ->where('materias.curso', $curso)
             ->where('materias.division', $division)
             ->where('materias.dia', $dia)
-            ->when($docenteId, fn($q) => $q->where('docentes.id_docente', '!=', $docenteId))
-            ->when($materiaIdIgnorar, fn($q) => $q->where('materias.id_materias', '!=', $materiaIdIgnorar))
+            ->where('docentes.id_docente', '!=', $docenteId)
+            ->when($materiaIdIgnorar, function ($q) use ($materiaIdIgnorar) {
+                return $q->where('materias.id_materias', '!=', $materiaIdIgnorar);
+            })
             ->where('materias.horario_inicio', '<', $fin)
             ->where('materias.horario_finalizacion', '>', $inicio)
             ->select('docentes.nombre', 'docentes.apellido', 'materias.nombre as materia')
             ->first();
 
         if ($conflictoCurso) {
-            return "El curso {$curso}° {$division}ª ya tiene asignado a {$conflictoCurso->nombre} {$conflictoCurso->apellido} ('{$conflictoCurso->materia}') el día {$dia} entre {$inicio} y {$fin}.";
+            return "El curso {$curso} {$division} ya tiene un profesor asignado ({$conflictoCurso->nombre} {$conflictoCurso->apellido}) el {$dia} entre {$inicio} y {$fin}.";
         }
 
         return null;
