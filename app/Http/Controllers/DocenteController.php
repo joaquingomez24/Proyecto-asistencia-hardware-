@@ -70,7 +70,7 @@ class DocenteController extends Controller
                 }
 
                 // B) Validar contra datos previos en la BD
-                $errorBD = $this->validarConflictosHorarios(null, $dia, $inicio, $fin, $curso, $division);
+                $errorBD = $this->validarConflictoHorario(null, null, $curso, $division, $dia, $inicio, $fin);
                 if ($errorBD) {
                     return redirect()->back()->withInput()->withErrors([
                         'solapamiento' => $errorBD
