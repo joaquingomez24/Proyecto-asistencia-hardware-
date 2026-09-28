@@ -12,8 +12,10 @@ class DatabaseSeeder extends Seeder
     {
         // Usuario secretario / prosecretario
         User::updateOrCreate(
-            ['name' => 'secretario'],
+            ['rol' => 'secretario'],
             [
+                'usuario'=>'juan',
+                'dni'=>'1234',
                 'email' => 'secretario@epet20.edu.ar',
                 'password' => Hash::make('epet20'),
                 'rol' => 'prosecretario',
@@ -22,8 +24,10 @@ class DatabaseSeeder extends Seeder
 
         // Usuario jefe
         User::updateOrCreate(
-            ['name' => 'jefe'],
+            ['rol' => 'jefe'],
             [
+                'usuario'=>'juan',
+                'dni'=>'1234',
                 'email' => 'jefe@epet20.edu.ar',
                 'password' => Hash::make('epet20'),
                 'rol' => 'jefe_preceptores',

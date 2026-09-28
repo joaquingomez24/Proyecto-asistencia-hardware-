@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Auth;
+Namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -18,12 +18,12 @@ class LoginController extends Controller
     public function login(Request $request)
 {
     $request->validate([
-        'name' => 'required',
+        'usuario' => 'required',
         'password' => 'required',
     ]);
 
     // Buscar al usuario en la tabla de usuarios
-    $user = \App\Models\User::where('name', $request->name)->first();
+    $user = \App\Models\User::where('usuario', $request->usuario)->first();
 
     if ($user && Hash::check($request->password, $user->password)) {
         Auth::login($user);
@@ -35,7 +35,7 @@ class LoginController extends Controller
 
     return back()->withErrors([
         'error' => 'Usuario o contraseña incorrectos.',
-    ])->withInput($request->only('name'));
+    ])->withInput($request->only('usuario'));
 }
     public function logout(Request $request)
     {
