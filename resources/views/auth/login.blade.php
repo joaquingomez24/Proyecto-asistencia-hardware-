@@ -22,7 +22,7 @@
 
     <input placeholder="Usuario" id="usuario" name="usuario" type="text" class="input" value="{{ old('usuario') }}" required autofocus>
     <input placeholder="Contraseña" id="contraseña" name="password" type="password" class="input" required>
-
+    <input placeholder="Número de documento" id="dni" name="dni" type="number" class="input" required>
     <input value="Iniciar Sesión" type="submit" class="login-button"/>
 </form>
 </div>
