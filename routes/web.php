@@ -7,6 +7,7 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\UsuarioController;
 use Illuminate\Support\Facades\Auth;
 
+
 Route::get('/', function () {
     return redirect()->route('login');
 });
@@ -63,3 +64,5 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/crear-cuenta', [UsuarioController::class, 'index'])->name('usuarios.index');
     Route::post('/crear-cuenta/store', [UsuarioController::class, 'store'])->name('usuarios.store');
 });
+
+Route::view('/dy50/pruebas', 'dy50.pruebas')->name('dy50.pruebas');
