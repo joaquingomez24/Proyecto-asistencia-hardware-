@@ -13,6 +13,9 @@ Route::get('/', function () {
 
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [LoginController::class, 'login']);
+\Illuminate\Support\Facades\Route::view('/dy50/pruebas', 'dy50.pruebas')->name('dy50.pruebas');
+
+
 
 Route::post('/logout', function () {
     Auth::logout();
