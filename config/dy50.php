@@ -1,14 +1,6 @@
 <?php
 
 return [
-
-    /*
-    |--------------------------------------------------------------------------
-    | Token compartido con la Raspberry
-    |--------------------------------------------------------------------------
-    | Se lee del archivo .env (DY50_API_TOKEN=...). Si queda vacío, la API
-    | rechaza todas las peticiones (falla cerrado).
-    */
-    'token' => env('DY50_API_TOKEN'),
-
+    // Definí DY50_TOKEN en .env. Nunca escribas el valor real del token en este archivo.
+    'token' => env('DY50_TOKEN', ''),
 ];

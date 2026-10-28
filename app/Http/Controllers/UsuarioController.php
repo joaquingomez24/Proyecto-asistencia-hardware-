@@ -2,67 +2,66 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Prosecretario;
+use App\Models\Docente;
+use App\Models\User;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class UsuarioController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // probando
-        if (auth()->user()->rol !== 'prosecretario') {
-            return redirect()->route('home');
-        }//fin
-       $usuarios = DB::table('users')
-        ->select('rol', 'usuario as usuario')
-        ->get();
+        abort_unless($request->user()?->rol === 'prosecretario', 403);
 
-    return view('usuarios.create', compact('usuarios'));
+        $usuarios = User::query()->orderBy('usuario')->get(['id', 'usuario', 'dni', 'email', 'rol', 'id_docente']);
+        $docentesSinCuenta = Docente::query()
+            ->whereDoesntHave('usuario')
+            ->orderBy('apellido')
+            ->orderBy('nombre')
+            ->get(['id_docente', 'DNI', 'nombre', 'apellido']);
+
+        return view('usuarios.create', compact('usuarios', 'docentesSinCuenta'));
     }
 
     public function store(Request $request)
     {
-        // probando
-        if (auth()->user()->rol !== 'prosecretario') {
-            return redirect()->route('home');
-        }//fin
-        // Elegir la tabla destino según el rol para validar duplicados
-        $tabla = 'users';//'prosecretario' ? 'prosecretario' : 'jefe_preceptors';
+        abort_unless($request->user()?->rol === 'prosecretario', 403);
 
-        $request->validate([
-            'rol' => 'required|in:prosecretario,jefe_preceptores',
-            'usuario' => "required|string|max:50|unique:{$tabla},usuario",
-            'password' => 'required|string|min:6',
-            'dni' => "required|numeric|digits_between:7,8|unique:{$tabla},dni",
-            'email' => "required|email|unique:{$tabla},email",
-        ], [
-            'rol.required' => 'El rol es obligatorio.',
-            'usuario.required' => 'El nombre de usuario es obligatorio.',
-            'usuario.unique' => 'Este nombre de usuario ya existe para este rol.',
-            'password.required' => 'La password es obligatoria.',
-            'password.min' => 'La password debe tener al menos 6 caracteres.',
-            'dni.required' => 'El DNI es obligatorio.',
-            'dni.numeric' => 'El DNI debe contener solo números.',
-            'dni.unique' => 'Este DNI ya está registrado.',
-            'email.required' => 'El email es obligatorio.',
-            'email.email' => 'Ingrese un email válido.',
-            'email.unique' => 'Este email ya está registrado.',
+        $datos = $request->validate([
+            'usuario' => ['required', 'string', 'max:100', Rule::unique('users', 'usuario')],
+            'dni' => ['required', 'digits_between:7,10', Rule::unique('users', 'dni')],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'rol' => ['required', Rule::in(['docente', 'prosecretario', 'jefe_preceptores'])],
+            'id_docente' => ['nullable', 'integer', 'exists:docentes,id_docente'],
         ]);
 
-        $datos = [
-            'rol' => $request->rol,
-            'usuario' => $request->usuario,
-            'password' => Hash::make($request->password),
-            'dni' => $request->dni,
-            'email' => $request->email,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ];
+        if ($datos['rol'] === 'docente' && empty($datos['id_docente'])) {
+            return back()->withErrors([
+                'id_docente' => 'Para crear una cuenta docente, primero elegí el registro del docente correspondiente.',
+            ])->withInput($request->except('password', 'password_confirmation'));
+        }
 
-        DB::table($tabla)->insert($datos);
+        if ($datos['rol'] !== 'docente') {
+            $datos['id_docente'] = null;
+        } elseif (User::where('id_docente', $datos['id_docente'])->exists()) {
+            return back()->withErrors([
+                'id_docente' => 'Ese docente ya tiene una cuenta de usuario.',
+            ])->withInput($request->except('password', 'password_confirmation'));
+        }
 
-        return redirect()->route('usuarios.index')->with('success', 'Usuario registrado con éxito.');
+        DB::transaction(function () use ($datos) {
+            User::create([
+                'usuario' => $datos['usuario'],
+                'dni' => $datos['dni'],
+                'email' => $datos['email'],
+                'password' => $datos['password'],
+                'rol' => $datos['rol'],
+                'id_docente' => $datos['id_docente'] ?? null,
+            ]);
+        });
+
+        return back()->with('exito', 'Cuenta creada correctamente.');
     }
 }

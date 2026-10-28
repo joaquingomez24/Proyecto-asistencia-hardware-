@@ -9,15 +9,17 @@ class Materia extends Model
     protected $table = 'materias';
     protected $primaryKey = 'id_materias';
 
-    public $timestamps = false;
-
     protected $fillable = [
-        'nombre',
-        'turno',
-        'curso',
-        'division',
-        'dia',
-        'horario_inicio',
-        'horario_finalizacion',
+        'nombre', 'turno', 'curso', 'division', 'dia', 'horario_inicio', 'horario_finalizacion',
     ];
+
+    public function docentes()
+    {
+        return $this->belongsToMany(
+            Docente::class,
+            'docentes_materias',
+            'id_materias',
+            'id_docente'
+        );
+    }
 }

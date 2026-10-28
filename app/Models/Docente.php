@@ -7,18 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 class Docente extends Model
 {
     protected $table = 'docentes';
-    
     protected $primaryKey = 'id_docente';
 
     protected $fillable = [
-        'DNI',
-        'nombre',
-        'apellido',
-        'telefono',
-        'email',
-        'id_huella',
-        'activo', 
+        'DNI', 'nombre', 'apellido', 'telefono', 'email', 'id_huella', 'activo',
     ];
+
+    protected function casts(): array
+    {
+        return ['activo' => 'boolean'];
+    }
 
     public function materias()
     {
@@ -28,5 +26,15 @@ class Docente extends Model
             'id_docente',
             'id_materias'
         );
+    }
+
+    public function huellas()
+    {
+        return $this->hasMany(Huella::class, 'id_docente', 'id_docente');
+    }
+
+    public function usuario()
+    {
+        return $this->hasOne(User::class, 'id_docente', 'id_docente');
     }
 }

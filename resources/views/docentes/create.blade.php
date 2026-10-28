@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Registrar Docente')
+@section('title', 'Editar Docente y Huella')
 
 @section('content')
 
@@ -11,8 +11,8 @@
                 <i class="fa-solid fa-clipboard-list"></i>
             </div>
             <div>
-                <h2 style="color: #1138a6; font-weight: 800; font-family: 'Segoe UI', sans-serif; margin: 0; font-size: 1.8rem;">Consulta de Asistencias</h2>
-                <p style="color: #6c757d; margin: 0; font-size: 0.95rem;">Visualice el listado de asistencias registradas.</p>
+                <h2 style="color: #1138a6; font-weight: 800; font-family: 'Segoe UI', sans-serif; margin: 0; font-size: 1.8rem;">Editar Docente</h2>
+                <p style="color: #6c757d; margin: 0; font-size: 0.95rem;">Modifique los datos del docente y vincule su ID de huella del lector DY50.</p>
             </div>
         </div>
 
@@ -34,38 +34,64 @@
             </div>
         @endif
 
-        <form action="{{ route('docentes.store') }}" method="POST">
+        <!-- SECCIÓN 1: Vincular ID de Huella del DY50 -->
+        <div style="background: #f8f9fa; border: 1px solid #e9ecef; padding: 1.25rem; border-radius: 10px; margin-bottom: 2rem;">
+            <h3 style="color: #1138a6; font-size: 1.2rem; margin-top: 0; margin-bottom: 0.75rem;"><i class="fa-solid fa-fingerprint"></i> Vincular ID de Huella (DY50)</h3>
+            <p style="color: #6c757d; font-size: 0.9rem; margin-bottom: 1rem;">Vincule un ID que ya fue enrolado físicamente en el sensor.</p>
+            
+            <form method="POST" action="{{ route('docentes.huellas.store', $docente) }}">
+                @csrf
+                <div class="fila">
+                    <div class="campo">
+                        <label for="sensor_id">ID registrado en el DY50</label>
+                        <input id="sensor_id" name="sensor_id" type="number" min="0" max="65535" required placeholder="Ej.: 1, 2, 3...">
+                    </div>
+                    <div class="campo">
+                        <label for="dedo">Dedo (opcional)</label>
+                        <input id="dedo" name="dedo" type="text" maxlength="40" placeholder="Ej.: índice derecho">
+                    </div>
+                </div>
+                <button type="submit" style="margin-top: 0.5rem; background-color: #0d6efd; color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; cursor: pointer; font-weight: 600;">
+                    <i class="fa-solid fa-link"></i> Vincular ID de huella
+                </button>
+            </form>
+        </div>
+
+        <!-- SECCIÓN 2: Formulario Principal de Datos del Docente y Horarios -->
+        <form action="{{ route('docentes.update', $docente->id_docente ?? $docente->id) }}" method="POST">
             @csrf
+            @method('PUT')
+            
             <div class="fila">
                 <div class="campo">
                     <label>Nombre</label>
-                    <input type="text" name="nombre" value="{{ old('nombre') }}" required>
+                    <input type="text" name="nombre" value="{{ old('nombre', $docente->nombre ?? '') }}" required>
                 </div>
                 <div class="campo">
                     <label>Apellido</label>
-                    <input type="text" name="apellido" value="{{ old('apellido') }}" required>
+                    <input type="text" name="apellido" value="{{ old('apellido', $docente->apellido ?? '') }}" required>
                 </div>
             </div>
 
             <div class="fila">
                 <div class="campo">
                     <label>DNI</label>
-                    <input type="text" name="DNI" value="{{ old('DNI') }}" required>
+                    <input type="text" name="DNI" value="{{ old('DNI', $docente->DNI ?? '') }}" required>
                 </div>
                 <div class="campo">
                     <label>Teléfono</label>
-                    <input type="text" name="telefono" value="{{ old('telefono') }}" required>
+                    <input type="text" name="telefono" value="{{ old('telefono', $docente->telefono ?? '') }}" required>
                 </div>
             </div>
 
             <div class="fila">
                 <div class="campo">
                     <label>Email</label>
-                    <input type="email" name="email" value="{{ old('email') }}" required>
+                    <input type="email" name="email" value="{{ old('email', $docente->email ?? '') }}" required>
                 </div>
                 <div class="campo">
-                    <label>Código de huella</label>
-                    <input type="number" name="id_huella" value="{{ old('id_huella') }}" required>
+                    <label>Código de huella (Heredado)</label>
+                    <input type="number" name="id_huella" value="{{ old('id_huella', $docente->id_huella ?? '') }}">
                 </div>
             </div>
 
@@ -188,11 +214,11 @@
                     </div>
                 @endif
             </div>
-
+            
             <br>
             <button type="button" id="btn-agregar">+ Agregar horario</button>
             <br><br>
-            <button type="submit">Guardar docente</button>
+            <button type="submit">Actualizar docente</button>
         </form>
     </div>
 </div>
