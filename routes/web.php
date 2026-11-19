@@ -1,68 +1,64 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
+use App\Enums\Rol;
+use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\DocenteController;
-use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\DocenteHuellaController;
+use App\Http\Controllers\DocentePanelController;
+use App\Http\Controllers\LectorController;
 use App\Http\Controllers\UsuarioController;
-use Illuminate\Support\Facades\Auth;
+use App\Http\Middleware\EnsureRole;
+use Illuminate\Support\Facades\Route;
 
-Route::get('/', function () {
-    return redirect()->route('login');
-});
+/** Arma "EnsureRole:rol1,rol2" sin depender de un alias registrado en bootstrap/app.php. */
+$rol = fn (Rol ...$roles) => EnsureRole::class . ':' . implode(',', array_map(fn (Rol $r) => $r->value, $roles));
+
+Route::get('/', fn () => redirect()->route(auth()->check() ? 'home' : 'login'));
 
 Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
-Route::post('/login', [LoginController::class, 'login']);
-\Illuminate\Support\Facades\Route::view('/dy50/pruebas', 'dy50.pruebas')->name('dy50.pruebas');
+Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:10,1');
 
+Route::middleware('auth')->group(function () use ($rol) {
 
+    Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
-Route::post('/logout', function () {
-    Auth::logout();
+    Route::get('/home', fn () => auth()->user()->esDocente()
+        ? redirect()->route('docente.panel')
+        : view('home'))->name('home');
 
-    request()->session()->invalidate();
-    request()->session()->regenerateToken();
+    // Estado del lector y de las órdenes enviadas (cada persona solo ve las suyas).
+    Route::get('/lector/en-linea', [LectorController::class, 'enLinea'])->name('lector.en-linea');
+    Route::get('/lector/comandos/{comando}', [LectorController::class, 'estado'])->name('lector.estado');
+    Route::delete('/lector/comandos/{comando}', [LectorController::class, 'cancelar'])->name('lector.cancelar');
 
-    return redirect('/login');
-})->name('logout');
+    // ── Docente (se usa desde la Raspberry) ─────────────────────────────────────
+    Route::middleware($rol(Rol::Docente))->group(function () {
+        Route::get('/docente', [DocentePanelController::class, 'index'])->name('docente.panel');
+        Route::post('/docente/asistencia', [DocentePanelController::class, 'iniciar'])->name('docente.asistencia.iniciar');
+    });
 
-Route::middleware(['auth'])->group(function () {
+    // ── Consulta y corrección de asistencias ───────────────────────────────────
+    Route::middleware($rol(Rol::Secretario, Rol::JefePreceptores))->group(function () {
+        Route::get('/asistencias', [AsistenciaController::class, 'index'])->name('asistencias.index');
+        Route::get('/asistencias/{asistencia}/editar', [AsistenciaController::class, 'edit'])->name('asistencias.edit');
+        Route::put('/asistencias/{asistencia}', [AsistenciaController::class, 'update'])->name('asistencias.update');
+    });
 
-    Route::get('/dashboard', function () {
-        return view('home');
-    })->name('dashboard');
+    // ── Gestión (solo secretario) ──────────────────────────────────────────────
+    Route::middleware($rol(Rol::Secretario))->group(function () {
+        Route::resource('docentes', DocenteController::class)->except(['show']);
+        Route::patch('/docentes/{docente}/activar', [DocenteController::class, 'activar'])->name('docentes.activar');
+        Route::patch('/docentes/{docente}/desactivar', [DocenteController::class, 'desactivar'])->name('docentes.desactivar');
 
-    Route::get('/home', function () {
-        return view('home');
-    })->name('home');
+        Route::post('/docentes/{docente}/huellas/enrolar', [DocenteHuellaController::class, 'enrolar'])->name('docentes.huellas.enrolar');
+        Route::delete('/docentes/{docente}/huellas/{huella}', [DocenteHuellaController::class, 'destroy'])
+            ->scopeBindings()
+            ->name('docentes.huellas.destroy');
 
-    // Dashboards por rol
-    Route::get('/prosecretario/dashboard', [AsistenciaController::class, 'index'])->name('prosecretario.index');
-    Route::get('/jefe/dashboard', [AsistenciaController::class, 'index'])->name('jefe.index');
+        Route::get('/cuentas', [UsuarioController::class, 'index'])->name('usuarios.index');
+        Route::post('/cuentas', [UsuarioController::class, 'store'])->name('usuarios.store');
 
-    // Gestión de Asistencias
-    Route::get('/asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
-    Route::get('/asistencia/registrar', [AsistenciaController::class, 'create'])->name('asistencia.registrar');
-    Route::post('/asistencia', [AsistenciaController::class, 'store'])->name('asistencia.marcar');
-    Route::get('/asistencia/editar', [AsistenciaController::class, 'edit'])->name('asistencia.edit');
-    Route::put('/asistencia/actualizar', [AsistenciaController::class, 'update'])->name('asistencia.update');
-
-    // Gestión de Docentes
-    Route::get('/docentes/create', [DocenteController::class, 'create'])->name('docentes.create');
-    Route::post('/docentes', [DocenteController::class, 'store'])->name('docentes.store');
-    Route::get('/docentes/buscar', [DocenteController::class, 'buscar'])->name('docentes.buscar');
-    Route::get('/docentes/{id}/editar', [DocenteController::class, 'edit'])->name('docentes.edit');
-    Route::put('/docentes/{id}', [DocenteController::class, 'update'])->name('docentes.update');
-    
-    // RUTAS PARA DESACTIVAR Y BORRAR DOCENTE
-    Route::patch('/docentes/{id}/desactivar', [DocenteController::class, 'desactivar'])->name('docentes.desactivar');
-    Route::patch('/docentes/{id}/activar', [DocenteController::class, 'activar'])->name('docentes.activar');
-    Route::delete('/docentes/{id}', [DocenteController::class, 'destroy'])->name('docentes.destroy');
-
-    // Gestión de Horarios
-    Route::delete('/horarios/{id}', [DocenteController::class, 'destroyMateria'])->name('horarios.destroy');
-
-    // Gestión de Usuarios
-    Route::get('/crear-cuenta', [UsuarioController::class, 'index'])->name('usuarios.index');
-    Route::post('/crear-cuenta/store', [UsuarioController::class, 'store'])->name('usuarios.store');
+        Route::get('/lector', [LectorController::class, 'diagnostico'])->name('lector.diagnostico');
+    });
 });

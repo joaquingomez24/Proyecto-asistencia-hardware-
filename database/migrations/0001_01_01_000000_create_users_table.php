@@ -6,21 +6,17 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('usuario');
-            $table->string('dni');
+            $table->string('usuario', 100)->unique();
+            $table->string('dni', 10)->unique();
             $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->string('rol', 30); // secretario | jefe_preceptores | docente (ver App\Enums\Rol)
             $table->rememberToken();
             $table->timestamps();
-            $table->string('rol'); // 'prosecretario' o 'jefe_preceptores'
         });
 
         Schema::create('password_reset_tokens', function (Blueprint $table) {
@@ -39,13 +35,10 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
-        Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('sessions');
+        Schema::dropIfExists('password_reset_tokens');
+        Schema::dropIfExists('users');
     }
 };

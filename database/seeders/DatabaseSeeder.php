@@ -2,35 +2,35 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Seeder;
+use App\Enums\Rol;
 use App\Models\User;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Database\Seeder;
+use RuntimeException;
 
+/**
+ * Crea la cuenta inicial del secretario con los datos de .env (no hay credenciales escritas en el código):
+ *   ADMIN_USUARIO, ADMIN_DNI, ADMIN_EMAIL, ADMIN_PASSWORD
+ * Las demás cuentas (jefes y docentes) las crea el secretario desde la página.
+ */
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Usuario secretario / prosecretario
-        User::updateOrCreate(
-            ['rol' => 'secretario'],
-            [
-                'usuario'=>'juan',
-                'dni'=>'1234',
-                'email' => 'secretario@epet20.edu.ar',
-                'password' => Hash::make('epet20'),
-                'rol' => 'prosecretario',
-            ]
-        );
+        $password = env('ADMIN_PASSWORD');
 
-        // Usuario jefe
+        if (! $password) {
+            throw new RuntimeException(
+                'Falta ADMIN_PASSWORD en .env. Definí ADMIN_USUARIO, ADMIN_DNI, ADMIN_EMAIL y ADMIN_PASSWORD antes de correr el seeder.'
+            );
+        }
+
         User::updateOrCreate(
-            ['rol' => 'jefe'],
+            ['usuario' => env('ADMIN_USUARIO', 'secretaria')],
             [
-                'usuario'=>'juan',
-                'dni'=>'1234',
-                'email' => 'jefe@epet20.edu.ar',
-                'password' => Hash::make('epet20'),
-                'rol' => 'jefe_preceptores',
+                'dni' => env('ADMIN_DNI', '00000000'),
+                'email' => env('ADMIN_EMAIL', 'secretaria@epet20.edu.ar'),
+                'password' => $password,
+                'rol' => Rol::Secretario,
             ]
         );
     }

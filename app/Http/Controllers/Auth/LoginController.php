@@ -12,42 +12,52 @@ class LoginController extends Controller
 {
     public function showLoginForm()
     {
+        if (Auth::check()) {
+            return redirect()->route('home');
+        }
+
         return view('auth.login');
     }
 
     public function login(Request $request)
     {
-        $request->validate([
-            'usuario'  => 'required|string',
-            'password' => 'required|string',
-            'dni'      => 'required|string',
+        $datos = $request->validate([
+            'usuario' => ['required', 'string', 'max:100'],
+            'dni' => ['required', 'string', 'max:20'],
+            'password' => ['required', 'string'],
         ]);
 
-        // Buscar al usuario que coincida con el usuario Y el DNI
-        $user = User::where('usuario', $request->usuario)
-                    ->where('dni', $request->dni)
-                    ->first();
+        $user = User::query()
+            ->where('usuario', $datos['usuario'])
+            ->where('dni', $datos['dni'])
+            ->first();
 
-        // Verificar si el usuario existe y la contraseña coincide
-        if ($user && Hash::check($request->password, $user->password)) {
-            Auth::login($user);
-            $request->session()->regenerate();
-
-            return redirect()->intended('/home');
+        if (! $user || ! Hash::check($datos['password'], $user->password)) {
+            return back()
+                ->withErrors(['error' => 'Usuario, DNI o contraseña incorrectos.'])
+                ->withInput($request->only('usuario', 'dni'));
         }
 
-        return back()->withErrors([
-            'error' => 'Usuario, contraseña o DNI incorrectos.',
-        ])->withInput($request->only('usuario', 'dni'));
+        if ($user->esDocente() && ! $user->docente?->activo) {
+            return back()
+                ->withErrors(['error' => 'Tu cuenta no está vinculada a un docente activo. Consultá a Secretaría.'])
+                ->withInput($request->only('usuario', 'dni'));
+        }
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        return $user->esDocente()
+            ? redirect()->route('docente.panel')
+            : redirect()->route('home');
     }
 
     public function logout(Request $request)
     {
         Auth::logout();
-
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect('/home');
+        return redirect()->route('login');
     }
 }

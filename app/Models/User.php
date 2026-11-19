@@ -2,31 +2,60 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Enums\Rol;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use Notifiable;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
+    protected $fillable = [
+        'usuario',
+        'dni',
+        'email',
+        'password',
+        'rol',
+        'docente_id',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'rol' => Rol::class,
         ];
+    }
+
+    public function docente(): BelongsTo
+    {
+        return $this->belongsTo(Docente::class);
+    }
+
+    public function esSecretario(): bool
+    {
+        return $this->rol === Rol::Secretario;
+    }
+
+    public function esJefe(): bool
+    {
+        return $this->rol === Rol::JefePreceptores;
+    }
+
+    public function esDocente(): bool
+    {
+        return $this->rol === Rol::Docente;
+    }
+
+    /** Quienes pueden consultar y editar el registro de asistencias. */
+    public function puedeGestionarAsistencias(): bool
+    {
+        return $this->esSecretario() || $this->esJefe();
     }
 }

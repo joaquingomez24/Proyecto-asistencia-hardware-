@@ -2,31 +2,43 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Docente extends Model
 {
-    protected $table = 'docentes';
-    
-    protected $primaryKey = 'id_docente';
+    protected $fillable = ['dni', 'nombre', 'apellido', 'telefono', 'email', 'activo'];
 
-    protected $fillable = [
-        'DNI',
-        'nombre',
-        'apellido',
-        'telefono',
-        'email',
-        'id_huella',
-        'activo', 
-    ];
-
-    public function materias()
+    protected function casts(): array
     {
-        return $this->belongsToMany(
-            Materia::class,
-            'docentes_materias',
-            'id_docente',
-            'id_materias'
-        );
+        return ['activo' => 'boolean'];
+    }
+
+    public function horarios(): HasMany
+    {
+        return $this->hasMany(Horario::class);
+    }
+
+    public function huellas(): HasMany
+    {
+        return $this->hasMany(Huella::class);
+    }
+
+    public function asistencias(): HasMany
+    {
+        return $this->hasMany(Asistencia::class);
+    }
+
+    public function usuario(): HasOne
+    {
+        return $this->hasOne(User::class);
+    }
+
+    /** "Apellido, Nombre" */
+    protected function nombreCompleto(): Attribute
+    {
+        return Attribute::get(fn () => $this->apellido . ', ' . $this->nombre);
     }
 }

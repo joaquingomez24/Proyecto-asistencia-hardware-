@@ -2,317 +2,124 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Enums\DiaSemana;
+use App\Http\Requests\DocenteRequest;
 use App\Models\Docente;
-use App\Models\Materia;
+use App\Models\Dy50Comando;
+use App\Services\HorarioService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+/** Alta, edición y baja de docentes (solo secretario). */
 class DocenteController extends Controller
 {
-    public function create()
+    public function __construct(private HorarioService $horarios)
     {
-        if (auth()->user()->rol !== 'prosecretario') {
-            return redirect()->route('home');
-        }
-        return view('docentes.create');
     }
 
-    public function store(Request $request)
+    public function index(Request $request)
     {
-        if (auth()->user()->rol !== 'prosecretario') {
-            return redirect()->route('home');
-        }
-
-        // 1. Validar que el DNI sea único
-        $request->validate([
-            'DNI' => 'required|unique:docentes,DNI',
-        ], [
-            'DNI.required' => 'El DNI es obligatorio.',
-            'DNI.unique'   => 'El DNI ingresado ya pertenece a otro docente registrado.'
-        ]);
-
-        $materias   = $request->input('materia', []);
-        $turnos     = $request->input('turno', []);
-        $cursos     = $request->input('curso', []);
-        $divisiones = $request->input('division', []);
-        $dias       = $request->input('dia', []);
-        $entradas   = $request->input('entrada', []);
-        $salidas    = $request->input('salida', []);
-
-        $materiasAProcesar = [];
-
-        // 2. Pre-procesar y validar solapamientos
-        foreach ($materias as $index => $nombreMateria) {
-            if (!empty($nombreMateria)) {
-                $dia      = $dias[$index] ?? null;
-                $inicio   = $entradas[$index] ?? null;
-                $fin      = $salidas[$index] ?? null;
-                $curso    = $cursos[$index] ?? null;
-                $division = $divisiones[$index] ?? null;
-
-                // A) Validar solapamientos dentro de las filas del mismo formulario
-                foreach ($materiasAProcesar as $materiaCargada) {
-                    if ($materiaCargada['dia'] === $dia) {
-                        // Conflicto de docente cargando dos clases al mismo tiempo
-                        if ($inicio < $materiaCargada['fin'] && $fin > $materiaCargada['inicio']) {
-                            return redirect()->back()->withInput()->withErrors([
-                                'solapamiento' => "Conflicto interno: El docente no puede dictar dos materias el día {$dia} de {$inicio} a {$fin}."
-                            ]);
-                        }
-
-                        // Conflicto de curso recibiendo dos materias al mismo tiempo
-                        if ($materiaCargada['curso'] == $curso && $materiaCargada['division'] == $division && ($inicio < $materiaCargada['fin'] && $fin > $materiaCargada['inicio'])) {
-                            return redirect()->back()->withInput()->withErrors([
-                                'solapamiento' => "Conflicto interno: El curso {$curso}° {$division}ª ya tiene asignada otra materia en el mismo horario ({$dia} de {$inicio} a {$fin})."
-                            ]);
-                        }
-                    }
-                }
-
-                // B) Validar contra datos previos en la BD
-                $errorBD = $this->validarConflictoHorario(null, null, $curso, $division, $dia, $inicio, $fin);
-                if ($errorBD) {
-                    return redirect()->back()->withInput()->withErrors([
-                        'solapamiento' => $errorBD
-                    ]);
-                }
-
-                $materiasAProcesar[] = [
-                    'nombre'   => $nombreMateria,
-                    'turno'    => $turnos[$index] ?? null,
-                    'curso'    => $curso,
-                    'division' => $division,
-                    'dia'      => $dia,
-                    'inicio'   => $inicio,
-                    'fin'      => $fin,
-                ];
-            }
-        }
-
-        // 3. Si pasó las validaciones, creamos al docente
-        $docente = Docente::create([
-            'DNI'       => $request->input('DNI', $request->input('dni')),
-            'nombre'    => $request->input('nombre'),
-            'apellido'  => $request->input('apellido'),
-            'telefono'  => $request->input('telefono'),
-            'email'     => $request->input('email'),
-            'id_huella' => $request->input('id_huella'),
-        ]);
-
-        // 4. Guardar las materias
-        foreach ($materiasAProcesar as $datosMateria) {
-            $nuevaMateria = Materia::create([
-                'nombre'               => $datosMateria['nombre'],
-                'turno'                => $datosMateria['turno'],
-                'curso'                => $datosMateria['curso'],
-                'division'             => $datosMateria['division'],
-                'dia'                  => $datosMateria['dia'],
-                'horario_inicio'       => $datosMateria['inicio'],
-                'horario_finalizacion' => $datosMateria['fin'],
-            ]);
-
-            DB::table('docentes_materias')->insert([
-                'id_docente'  => $docente->id_docente,
-                'id_materias' => $nuevaMateria->id_materias,
-            ]);
-        }
-
-        // 5. Redirección con mensaje de éxito
-        return redirect()->route('home')->with('exito', 'Docente y materias guardados correctamente.');
-    }
-
-    public function buscar(Request $request)
-    {
-        if (auth()->user()->rol !== 'prosecretario') {
-            return redirect()->route('home');
-        }
-
-        $query = Docente::query();
-
-        if ($request->filled('buscar')) {
-            $term = $request->buscar;
-            $query->where(function($q) use ($term) {
-                $q->where('nombre', 'LIKE', "%{$term}%")
-                  ->orWhere('apellido', 'LIKE', "%{$term}%")
-                  ->orWhere('DNI', 'LIKE', "%{$term}%");
-            });
-        }
-
-        $docentes = $query->get();
-
-        return view('docentes.buscar', compact('docentes'));
-    }
-
-    public function edit($id)
-    {
-        if (auth()->user()->rol !== 'prosecretario') {
-            return redirect()->route('home');
-        }
-
-        $docente = Docente::findOrFail($id);
-
-        $materias = DB::table('materias')
-            ->join('docentes_materias', 'materias.id_materias', '=', 'docentes_materias.id_materias')
-            ->where('docentes_materias.id_docente', $id)
-            ->select('materias.*')
+        $docentes = Docente::query()
+            ->withCount('huellas')
+            ->when($request->input('buscar'), function ($q, $texto) {
+                $q->where(fn ($w) => $w
+                    ->where('nombre', 'like', "%{$texto}%")
+                    ->orWhere('apellido', 'like', "%{$texto}%")
+                    ->orWhere('dni', 'like', "%{$texto}%"));
+            })
+            ->orderBy('apellido')
+            ->orderBy('nombre')
             ->get();
 
-        return view('docentes.edit', compact('docente', 'materias'));
+        return view('docentes.index', compact('docentes'));
     }
 
-        /**
-     * Actualizar los datos del docente y sus materias/horarios.
-     */
-    public function update(Request $request, $id)
+    public function create()
     {
-        $docente = DB::table('docentes')->where('id_docente', $id)->first();
+        return view('docentes.create', ['dias' => DiaSemana::laborables()]);
+    }
 
-        if (!$docente) {
-            return back()->withErrors(['No se encontró el docente.'])->withInput();
+    public function store(DocenteRequest $request)
+    {
+        $filas = $request->input('horarios', []);
+
+        if ($errores = $this->horarios->conflictos($filas)) {
+            return back()->withInput()->withErrors(['horarios' => $errores]);
         }
 
-        // 1. Validar conflictos de horario antes de actualizar
-        if ($request->has('materia') && is_array($request->materia)) {
-            foreach ($request->materia as $i => $nombreMateria) {
-                $materiaIdIgnorar = $request->id_materia[$i] ?? null;
-                $curso = $request->curso[$i] ?? null;
-                $division = $request->division[$i] ?? null;
-                $dia = $request->dia[$i] ?? null;
-                $inicio = $request->entrada[$i] ?? null;
-                $fin = $request->salida[$i] ?? null;
+        DB::transaction(function () use ($request, $filas) {
+            $docente = Docente::create($request->safe()->only(['dni', 'nombre', 'apellido', 'telefono', 'email']));
+            $this->horarios->sincronizar($docente, $filas);
+        });
 
-                if ($curso && $division && $dia && $inicio && $fin) {
-                    $error = $this->validarConflictoHorario($id, $materiaIdIgnorar, $curso, $division, $dia, $inicio, $fin);
-                    if ($error) {
-                        return back()->withErrors([$error])->withInput();
-                    }
-                }
-            }
-        }
+        return redirect()->route('docentes.index')->with('exito', 'Docente y horarios guardados correctamente.');
+    }
 
-        // 2. Actualizar datos básicos del docente
-        DB::table('docentes')->where('id_docente', $id)->update([
-            'nombre'    => $request->nombre,
-            'apellido'  => $request->apellido,
-            'DNI'       => $request->DNI,
-            'telefono'  => $request->telefono,
-            'email'     => $request->email,
-            'id_huella' => $request->id_huella,
+    public function edit(Docente $docente)
+    {
+        $docente->load(['horarios.materia', 'huellas']);
+
+        return view('docentes.edit', [
+            'docente' => $docente,
+            'dias' => DiaSemana::laborables(),
         ]);
+    }
 
-        // 3. Procesar las materias/horarios
-        if ($request->has('materia') && is_array($request->materia)) {
-            foreach ($request->materia as $i => $nombreMateria) {
-                $idMateria = $request->id_materia[$i] ?? null;
+    public function update(DocenteRequest $request, Docente $docente)
+    {
+        $filas = $request->input('horarios', []);
 
-                $datosMateria = [
-                    'nombre'               => $nombreMateria,
-                    'turno'                => $request->turno[$i] ?? null,
-                    'curso'                => $request->curso[$i] ?? null,
-                    'division'             => $request->division[$i] ?? null,
-                    'horario_inicio'       => $request->entrada[$i] ?? null,
-                    'horario_finalizacion' => $request->salida[$i] ?? null,
-                    'dia'                  => $request->dia[$i] ?? null,
-                ];
+        if ($errores = $this->horarios->conflictos($filas, $docente)) {
+            return back()->withInput()->withErrors(['horarios' => $errores]);
+        }
 
-                if ($idMateria) {
-                    // Actualizar materia existente
-                    DB::table('materias')->where('id_materias', $idMateria)->update($datosMateria);
-                } else {
-                    // Crear nueva materia y vincularla al docente
-                    $nuevoIdMateria = DB::table('materias')->insertGetId($datosMateria);
-                    DB::table('docentes_materias')->insert([
-                        'id_docente'  => $id,
-                        'id_materias' => $nuevoIdMateria,
-                    ]);
-                }
+        DB::transaction(function () use ($request, $docente, $filas) {
+            $docente->update($request->safe()->only(['dni', 'nombre', 'apellido', 'telefono', 'email']));
+
+            // El DNI de una cuenta docente es el de su ficha: se mantienen iguales.
+            $docente->usuario?->update(['dni' => $docente->dni]);
+
+            $this->horarios->sincronizar($docente, $filas);
+        });
+
+        return redirect()->route('docentes.index')->with('exito', 'Docente actualizado correctamente.');
+    }
+
+    public function activar(Docente $docente)
+    {
+        $docente->update(['activo' => true]);
+
+        return back()->with('exito', "{$docente->nombre_completo} fue activado.");
+    }
+
+    public function desactivar(Docente $docente)
+    {
+        $docente->update(['activo' => false]);
+
+        return back()->with('exito', "{$docente->nombre_completo} fue desactivado. Ya no puede iniciar sesión ni registrar asistencia.");
+    }
+
+    public function destroy(Docente $docente)
+    {
+        if ($docente->asistencias()->exists()) {
+            return back()->withErrors([
+                'docente' => 'Este docente tiene asistencias registradas y no se puede eliminar. Desactivalo para conservar el historial.',
+            ]);
+        }
+
+        DB::transaction(function () use ($docente) {
+            // Pide al lector que libere las plantillas (si el agente está conectado).
+            foreach ($docente->huellas as $huella) {
+                Dy50Comando::nuevo(Dy50Comando::BORRAR, 10, [
+                    'user_id' => auth()->id(),
+                    'sensor_id' => $huella->sensor_id,
+                ]);
             }
-        }
 
-        return redirect()->route('home')->with('exito', 'Docente actualizado correctamente.');
-    }
+            $docente->usuario?->delete();
+            $docente->delete();
+        });
 
-    /**
-     * Función privada para validar solapamiento de horarios ignorando al docente actual y la materia que se edita.
-     */
-    private function validarConflictoHorario($docenteId, $materiaIdIgnorar, $curso, $division, $dia, $inicio, $fin)
-    {
-        // 1. Conflicto de Horario del mismo Docente (ignora el horario que está editando)
-        $conflictoDocente = DB::table('materias')
-            ->join('docentes_materias', 'materias.id_materias', '=', 'docentes_materias.id_materias')
-            ->where('docentes_materias.id_docente', $docenteId)
-            ->where('materias.dia', $dia)
-            ->when($materiaIdIgnorar, function ($q) use ($materiaIdIgnorar) {
-                return $q->where('materias.id_materias', '!=', $materiaIdIgnorar);
-            })
-            ->where('materias.horario_inicio', '<', $fin)
-            ->where('materias.horario_finalizacion', '>', $inicio)
-            ->select('materias.nombre as materia')
-            ->first();
-
-        if ($conflictoDocente) {
-            return "El docente ya tiene asignada la materia '{$conflictoDocente->materia}' el día {$dia} entre {$inicio} y {$fin}.";
-        }
-
-        // 2. Conflicto de Aula/Curso (ignora al docente actual y la materia que está editando)
-        $conflictoCurso = DB::table('materias')
-            ->join('docentes_materias', 'materias.id_materias', '=', 'docentes_materias.id_materias')
-            ->join('docentes', 'docentes.id_docente', '=', 'docentes_materias.id_docente')
-            ->where('materias.curso', $curso)
-            ->where('materias.division', $division)
-            ->where('materias.dia', $dia)
-            ->where('docentes.id_docente', '!=', $docenteId)
-            ->when($materiaIdIgnorar, function ($q) use ($materiaIdIgnorar) {
-                return $q->where('materias.id_materias', '!=', $materiaIdIgnorar);
-            })
-            ->where('materias.horario_inicio', '<', $fin)
-            ->where('materias.horario_finalizacion', '>', $inicio)
-            ->select('docentes.nombre', 'docentes.apellido', 'materias.nombre as materia')
-            ->first();
-
-        if ($conflictoCurso) {
-            return "El curso {$curso} {$division} ya tiene un profesor asignado ({$conflictoCurso->nombre} {$conflictoCurso->apellido}) el {$dia} entre {$inicio} y {$fin}.";
-        }
-
-        return null;
-    }
-    /**
-     * Desactivar un docente.
-     */
-    public function desactivar($id)
-    {
-        try {
-            DB::table('docentes')->where('id_docente', $id)->update(['activo' => 0]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Docente desactivado correctamente.'
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al desactivar el docente: ' . $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Activar un docente.
-     */
-    public function activar($id)
-    {
-        try {
-            DB::table('docentes')->where('id_docente', $id)->update(['activo' => 1]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Docente activado correctamente.'
-            ], 200);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Error al activar el docente: ' . $e->getMessage()
-            ], 500);
-        }
+        return redirect()->route('docentes.index')->with('exito', 'Docente eliminado.');
     }
 }

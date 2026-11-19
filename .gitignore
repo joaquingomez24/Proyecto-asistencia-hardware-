@@ -1,1 +1,47 @@
+# Laravel dependencies and generated assets
+/vendor/
+/node_modules/
+/public/build/
+/public/hot
+/bootstrap/cache/*.php
+!/bootstrap/cache/.gitignore
 
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+/dy50-tls/
+/server.crt
+/server.key
+/*.key
+/*.csr
+/*.srl
+
+# Local databases and generated state
+/asistencia_laravel
+/database/*.sqlite
+/database/*.sqlite-*
+/.phpunit.result.cache
+/.phpunit.cache/
+/storage/logs/*.log
+/storage/framework/cache/data/*
+!/storage/framework/cache/data/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+
+# Python caches and test artifacts
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local-only/empty web assets
+/public/favicon.ico
+
+# OS/editor files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,21 @@
+# Opcional: arrancar el agente solo al encender la Raspberry.
+#   sudo cp dy50-agente.service /etc/systemd/system/
+#   sudo nano /etc/systemd/system/dy50-agente.service      (ajustá URL, TOKEN y rutas)
+#   sudo systemctl daemon-reload && sudo systemctl enable --now dy50-agente
+#   journalctl -u dy50-agente -f                           (ver el registro)
+[Unit]
+Description=Agente del lector DY50
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=alumnos
+WorkingDirectory=/home/alumnos/dy50
+Environment=DY50_URL=https://192.168.100.150:8443
+Environment=DY50_TOKEN=CAMBIAR
+ExecStart=/usr/bin/python3 /home/alumnos/dy50/dy50_agente.py --cafile /home/alumnos/certs/ca.crt
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

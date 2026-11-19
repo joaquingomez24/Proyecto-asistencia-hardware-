@@ -3,21 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Materia extends Model
 {
-    protected $table = 'materias';
-    protected $primaryKey = 'id_materias';
+    protected $fillable = ['nombre'];
 
-    public $timestamps = false;
-
-    protected $fillable = [
-        'nombre',
-        'turno',
-        'curso',
-        'division',
-        'dia',
-        'horario_inicio',
-        'horario_finalizacion',
-    ];
+    public function horarios(): HasMany
+    {
+        return $this->hasMany(Horario::class);
+    }
 }
